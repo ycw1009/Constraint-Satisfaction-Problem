@@ -8,9 +8,6 @@
 
 using namespace std;
 
-class Arc{
-		
-};
 class Word{
 	public:
 		int len;
@@ -45,9 +42,9 @@ namespace std {
 
       // Compute individual hash values 
       return (hash<int>()(k.startX) ^ 
-	  				((hash<int>()(k.startY) ^ 
-							((hash<int>()(k.len) ^ 
-									(hash<char>()(k.direction) << 1)) << 1)) <<1));    }
+	  			((hash<int>()(k.startY) ^ 
+					((hash<int>()(k.len) ^ 
+						(hash<char>()(k.direction) << 1)) << 1)) <<1));    }
   };
 
 }
@@ -68,7 +65,7 @@ class Constraint{//Binary constraint
 
 vector<string> vocabulary[15];								//the length of the longest vocabulary
 unordered_map<Word, string > assignments;
-
+int node_expand =0;
 
 class Puzzle{
 	public:
@@ -159,6 +156,7 @@ class Puzzle{
 bool recursiveBackTracking(Puzzle P){
 	if (assignments.size() == P.words.size()) return true;
 	else{
+		node_expand++;
 		Word select = P.selectUnsignedWord();
 		for(string str: P.domains[select]){
 			if(P.nonConflict(select, str)) {
@@ -201,6 +199,8 @@ int main(){
 		P.setDomain();											// set domain initially with corresponding length of vocabulary
 		P.setConstraint();
 		backTracking(P);
+		printf("node expand: %d\n", node_expand);
+		node_expand =0;
 		//ac3(P);
 		str = "";
 		assignments = {};
