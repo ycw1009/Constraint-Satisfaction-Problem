@@ -151,18 +151,30 @@ class Puzzle{
 
 		}
 		
-		Word selectUnsignedWord(bool MRV = false){
+		Word selectUnsignedWord(bool MRV = false, bool DEGREE = false){
+			if (DEGREE){
+				Word degree_max_word;
+				int most_degree_cnt = 0;
+				for(int i = 0; i <this->words.size(); i++){
+					auto got = assignments.find(this->words[i]);
+					if(got == assignments.end() && this->neighbors[this->words[i]].size() >= most_degree_cnt){
+						degree_max_word = this->words[i];
+						most_degree_cnt = this->neighbors[this->words[i]].size();
+					}
+				}
+				return degree_max_word;
+			}
 			if (MRV){
-				Word mini;
+				Word mini_remain_word;
 				int least_domain_num = INT_MAX;
 				for(int i = 0; i <this->words.size(); i++){
 					auto got = assignments.find(this->words[i]);
 					if(got == assignments.end() && this->domains[this->words[i]].size()<=least_domain_num){
-						mini = this->words[i];
+						mini_remain_word = this->words[i];
 						least_domain_num = this->domains[this->words[i]].size();
 					}
 				}
-				return mini;
+				return mini_remain_word;
 			}
 			else{
 				for(int i = 0; i <this->words.size(); i++){
@@ -185,11 +197,11 @@ class Puzzle{
 
 
 };
-bool recursiveBackTracking(Puzzle P,bool FC = false, bool MRV = false){
+bool recursiveBackTracking(Puzzle P,bool FC = false, bool MRV = false, bool DEGREE = false){
 	if (assignments.size() == P.words.size()) return true;
 	else{
 		
-		Word select = P.selectUnsignedWord(MRV);
+		Word select = P.selectUnsignedWord(MRV, DEGREE);
 		for(string str: P.domains[select]){
 			if(P.nonConflict(select, str)) {
 				node_expand++;
@@ -204,8 +216,8 @@ bool recursiveBackTracking(Puzzle P,bool FC = false, bool MRV = false){
 		return false;
 	}
 }
-void backTracking (Puzzle P,bool FC = false, bool MRV = false){
-	if(recursiveBackTracking(P, FC, MRV)){
+void backTracking (Puzzle P,bool FC = false, bool MRV = false, bool DEGREE = false){
+	if(recursiveBackTracking(P, FC, MRV, DEGREE)){
 		printf("Answer Found\n");
 		for ( auto it = assignments.begin(); it != assignments.end(); ++it ){
     		cout <<"Word x: " << it->first.startX<<", y: "<<it->first.startY<<", len: "\
@@ -218,7 +230,8 @@ void backTracking (Puzzle P,bool FC = false, bool MRV = false){
 
 int main(){
 	bool FC = true;
-	bool MRV = false;
+	bool MRV = true;
+	bool DEGREE = true;
 	ifstream fin2("English Words 3000.txt");
 	for(string str; getline( fin2, str ,'\n'); ){// store all vocabulary in vector
 		stringstream ss(str); // remove weird characters
@@ -235,7 +248,7 @@ int main(){
 		Puzzle P(str);			 								// initial puzzle with input string
 		P.setDomain();											// set domain initially with corresponding length of vocabulary
 		P.setConstraint();
-		backTracking(P,FC, MRV);
+		backTracking(P,FC, MRV,DEGREE);
 		printf("node expand: %d\n", node_expand);
 		node_expand =0;
 		//ac3(P);
