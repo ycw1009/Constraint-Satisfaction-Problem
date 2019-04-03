@@ -66,7 +66,7 @@ class Constraint{//Binary constraint
 vector<string> vocabulary[15];								//the length of the longest vocabulary
 unordered_map<Word, string > assignments;
 int node_expand =0;
-
+int answer_cnt = 0;
 class Puzzle{
 	public:
 		vector<Word> words;//Variables
@@ -197,7 +197,7 @@ class Puzzle{
 
 
 };
-bool recursiveBackTracking(Puzzle P,bool FC = false, bool MRV = false, bool DEGREE = false){
+bool recursiveBackTracking(Puzzle P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false){
 	if (assignments.size() == P.words.size()) return true;
 	else{
 		
@@ -208,32 +208,39 @@ bool recursiveBackTracking(Puzzle P,bool FC = false, bool MRV = false, bool DEGR
 				if (!P.assign(select,str,FC)){
 					P.unassign(select);
 				}
-				bool result = recursiveBackTracking(P, FC, MRV);
-				if(result) return result;
+				bool result = recursiveBackTracking(P, FC, MRV, show_all);
+				if(result && assignments.size() == P.words.size() && show_all){
+					answer_cnt++;
+				}
+				else if(result) return result;
 				P.unassign(select);
 			}
 		}
 		return false;
 	}
 }
-void backTracking (Puzzle P,bool FC = false, bool MRV = false, bool DEGREE = false){
-	if(recursiveBackTracking(P, FC, MRV, DEGREE)){
+void backTracking (Puzzle P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false){
+	if(recursiveBackTracking(P, FC, MRV, DEGREE, show_all)){
 		printf("Answer Found\n");
 		for ( auto it = assignments.begin(); it != assignments.end(); ++it ){
     		cout <<"Word x: " << it->first.startX<<", y: "<<it->first.startY<<", len: "\
 				<<it->first.len<<", direction: "<<it->first.direction\
 				<< ", is filled with : "<< it->second <<endl;
 		}
+		printf("node expand: %d\n", node_expand);
+
 	}
-	else{ printf("Answer Not Found\n");}
+	else if (show_all)  printf("answer count: %d\n", answer_cnt);
+	else { printf("Answer Not Found\n");}
 }
 
 int main(){
-	bool FC = true;
-	bool MRV = true;
-	bool DEGREE = true;
+	bool FC = false;  // Apply forward checking
+	bool MRV = false; // Apply Minimum Remaining Variable selection
+	bool DEGREE = false;// Apply most neighbors Variable selection
+	bool show_all = false;// Find an answer and stop or go through all possible answers
 	ifstream fin2("English Words 3000.txt");
-	for(string str; getline( fin2, str ,'\n'); ){// store all vocabulary in vector
+	for(string str; getline( fin2, str ,'\n'); ){ // store all vocabulary in vector
 		stringstream ss(str); // remove weird characters
 		string str2;
 		ss>>str2;
@@ -248,10 +255,10 @@ int main(){
 		Puzzle P(str);			 								// initial puzzle with input string
 		P.setDomain();											// set domain initially with corresponding length of vocabulary
 		P.setConstraint();
-		backTracking(P,FC, MRV,DEGREE);
-		printf("node expand: %d\n", node_expand);
-		node_expand =0;
-		//ac3(P);
+		backTracking( P, FC, MRV, DEGREE, show_all);
+		// reset variables
+		node_expand = 0;
+		answer_cnt = 0;
 		str = "";
 		assignments = {};
 	}
