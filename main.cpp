@@ -22,7 +22,6 @@ class Word{
 			startY = y;
 			len = l;
 			direction = d;
-			printf("word: x = %d, y = %d, l = %d, d = %c\n",startX,startY,len,direction);
 		};
 		// for hash key
 		bool operator==(const Word &other) const
@@ -41,7 +40,6 @@ namespace std {
     {
       using std::size_t;
       using std::hash;
-      using std::string;
 
       // Compute individual hash values 
       return (hash<int>()(k.startX) ^ 
@@ -65,20 +63,21 @@ class Constraint{//Binary constraint
 			this->to_index = b_index;
 		};
 };
-vector<string> vocabulary[15];								//the length of the longest vocabulary
+vector<string> vocabulary[15];//the length of the longest vocabulary
 unordered_map<Word, string > assignments;
-stack<Word> assign_stack;
+stack< pair<Word,string> > assign_stack;
 int node_expand =0;
 int answer_cnt = 0;
+
 class Puzzle{
 	public:
 		vector<Word> words;//Variables
-		unordered_map<Word, vector<string> > domains;
+		unordered_map<Word, vector<string> > domains;//use to store domain of word
 		unordered_map<Word, vector<string> > old_domains;//use to reset domain to ussign state
 		unordered_map<Word, unordered_map<Word, vector<string> > > old_state; //use to reset other domain to ussign state
 		unordered_map<Word, vector<Constraint> > neighbors;
 		
-
+		// Constructor
 		Puzzle(){};
 		Puzzle(string str){
 			stringstream ss(str);
@@ -96,26 +95,33 @@ class Puzzle{
 			}
 
 		}
+		// set neighbors of all words
 		void setConstraint(){
 			for(int i = 0; i < this->words.size(); i ++){
 				for(int j = 0 ; j < this->words.size() ; j++){
 					if( i == j ) continue; //the same word
 					if(this->words[i].direction == this->words[j].direction) continue;
 					if(this->words[i].direction =='A'){
-						if((this->words[j].startX >= this->words[i].startX && this->words[j].startX <= this->words[i].startX +this->words[i].len - 1)// x accepted
-							&& (this->words[i].startY >= this->words[j].startY && this->words[i].startY <= this->words[j].startY + this->words[j].len - 1)){// y accepted
+						if((this->words[j].startX >= this->words[i].startX 
+								&& this->words[j].startX <= this->words[i].startX +this->words[i].len - 1)// x accepted
+							&& (this->words[i].startY >= this->words[j].startY 
+								&& this->words[i].startY <= this->words[j].startY + this->words[j].len - 1)){// y accepted
 								int index_from = this->words[j].startX - this->words[i].startX;
 								int index_to = this->words[i].startY - this->words[j].startY;
 								Constraint c(this->words[i],this->words[j],index_from,index_to);
+								//push neighbors
 								this->neighbors[this->words[i]].push_back(c);
 						}
 					}
 					else if(this->words[i].direction =='D'){
-						if((this->words[i].startX >= this->words[j].startX && this->words[i].startX <= this->words[j].startX +this->words[j].len - 1)// x accepted
-							&& (this->words[j].startY >= this->words[i].startY && this->words[j].startY <= this->words[i].startY + this->words[i].len - 1)){// y accepted
+						if((this->words[i].startX >= this->words[j].startX 
+								&& this->words[i].startX <= this->words[j].startX +this->words[j].len - 1)// x accepted
+							&& (this->words[j].startY >= this->words[i].startY
+								&& this->words[j].startY <= this->words[i].startY + this->words[i].len - 1)){// y accepted
 								int index_from = this->words[j].startY - this->words[i].startY;
 								int index_to = this->words[i].startX - this->words[j].startX;
 								Constraint c(this->words[i],this->words[j],index_from,index_to);
+								//push neighbors
 								this->neighbors[this->words[i]].push_back(c);
 							}
 					}
@@ -123,6 +129,7 @@ class Puzzle{
 			}
 			
 		}
+		//AC3 check if remove inconsistent value then push neighbor's neighbor into queue
 		bool removeInconsistentValue(Constraint c){
 			bool removal = false;
 			for(auto i = this->domains[c.to].begin(); i != this->domains[c.to].end();){//Check all possible string of this variable 
@@ -141,10 +148,11 @@ class Puzzle{
 			}
 			return removal;
 		}
-
+		// maintain arc consistency
 		void AC3(queue<Constraint> q){
 			while(!q.empty()){
 				Constraint c = q.front(); q.pop();
+				// check if remove inconsistent value then push neighbor's neighbor into queue
 				if(removeInconsistentValue(c)){
 					for(Constraint cst: this->neighbors[c.to]){
 						q.push(cst);
@@ -152,19 +160,24 @@ class Puzzle{
 				}
 			}
 		}
-
+		// assign string to word
 		bool assign(Word word, string str, bool fc = false,bool ac3 = false){
+			assign_stack.push(make_pair(word,str));
 			this->old_domains[word] = this->domains[word];
 			vector<string> assign_val = {str};
 			this->domains[word] = assign_val;
 			assignments[word] = str;
-			//cout<<"Assign " <<str<< " Successfully"<<endl;
+			// Apply AC3 or fc
 			if (ac3) {
+				// store previous state
 				this->old_state[word] = this->domains;
 				this->old_state[word][word] = this->old_domains[word];
+				// push neighbor into queue
 				queue<Constraint> q;
 				for(Constraint c: this->neighbors[word]) q.push(c);
+				// apply ac3
 				AC3(q);
+				// check whether neighbor is empty
 				for(Word word: this->words){
 					if(this->domains[word].empty()){
 						return false;
@@ -173,13 +186,14 @@ class Puzzle{
 
 			}
 			else if(fc){
-				//store previous state
+				// store previous state
 				this->old_state[word] = this->domains;
 				this->old_state[word][word] = this->old_domains[word];
+				// check all negihbors domain, remove unvalid vocabulary
 				for(Constraint c: this->neighbors[word]){
 					auto got = assignments.find(c.to);
 					if(got != assignments.end()) continue;// this neighbor has word but checked already
-					for(auto i = this->domains[c.to].begin(); i != this->domains[c.to].end();){//iterate all neighbors domain 
+					for(auto i = this->domains[c.to].begin(); i != this->domains[c.to].end();){// iterate all neighbors domain 
 						if((*i)[c.to_index]!= str[c.from_index])//remove illegal ones 
 						{	
 							this->domains[c.to].erase(i);
@@ -194,8 +208,9 @@ class Puzzle{
 			
 			return true;
 		}
-
+		// unassign word and recover domain
 		void unassign(Word word, bool fc = false, bool ac3 = false){
+			assign_stack.pop();
 			auto got = assignments.find(word);
 			if(got == assignments.end()) return;
 			assignments.erase(word);
@@ -205,8 +220,9 @@ class Puzzle{
 			//printf("Unassign Successfully\n");
 
 		}
+		// select next word to be assigned
 		Word selectUnsignedWord(bool MRV = false, bool DEGREE = false){
-			if (MRV && DEGREE){//apply mrv first
+			if (MRV && DEGREE){// apply mrv first and then degree
 				Word return_word;
 				int least_domain_num = INT_MAX;
 				int most_degree_cnt = 0;
@@ -226,7 +242,7 @@ class Puzzle{
 				}
 				return return_word;
 			}
-			else if (DEGREE){
+			else if (DEGREE){// find the word which has the most neighbors
 				Word degree_max_word;
 				int most_degree_cnt = 0;
 				for(int i = 0; i <this->words.size(); i++){
@@ -239,7 +255,7 @@ class Puzzle{
 				return degree_max_word;
 			}
 
-			else if (MRV){
+			else if (MRV){//find the word which has the minimum remaining value
 				Word mini_remain_word;
 				int least_domain_num = INT_MAX;
 				for(int i = 0; i <this->words.size(); i++){
@@ -251,7 +267,7 @@ class Puzzle{
 				}
 				return mini_remain_word;
 			}
-			else{
+			else{// choose the first found word
 				for(int i = 0; i <this->words.size(); i++){
 					auto got = assignments.find(this->words[i]);
 					if(got == assignments.end()){
@@ -260,6 +276,7 @@ class Puzzle{
 				}
 			}
 		}
+		//check this vocabulary dpesn't conflict
 		bool nonConflict(Word select, string str){
 			for(Constraint& c :this->neighbors[select]){
 				auto got = assignments.find(c.to);
@@ -275,19 +292,19 @@ class Puzzle{
 
 
 bool recursiveBackTracking(Puzzle& P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false, bool ac3 = false){
-	if (assignments.size() == P.words.size()) return true;
+	if (assignments.size() == P.words.size()) return true;// all word are assigned
 	else{	
-		Word select = P.selectUnsignedWord(MRV, DEGREE);
-		for(string str: P.domains[select]){
-			if(P.nonConflict(select, str)) {
-				if (!P.assign(select,str,FC,ac3)){
+		Word select = P.selectUnsignedWord(MRV, DEGREE);// select next word
+		for(string str: P.domains[select]){// iterate all domain of that word
+			if(P.nonConflict(select, str)) { 
+				if (!P.assign(select,str,FC,ac3)){//check fc or ac3
 					P.unassign(select,FC,ac3);
 					continue;
 				}
 				node_expand++;
 				bool result = recursiveBackTracking(P, FC, MRV, DEGREE, show_all,ac3);
 				if(result && !show_all) return result;
-				else if (result && show_all) {
+				else if (result && show_all) {//for find all answer
 					answer_cnt++;
 				}
 				P.unassign(select,FC,ac3);
@@ -300,28 +317,29 @@ bool recursiveBackTracking(Puzzle& P,bool FC = false, bool MRV = false, bool DEG
 }
 void backTracking (Puzzle& P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false, bool ac3 = false){
 	if(recursiveBackTracking(P, FC, MRV, DEGREE, show_all, ac3)){
-		printf("Answer Found\n");
-		for ( auto it = assignments.begin(); it != assignments.end(); ++it ){
-    		cout <<"Word x: " << it->first.startX<<", y: "<<it->first.startY<<", len: "\
-				<<it->first.len<<", direction: "<<it->first.direction\
-				<< ", is filled with : "<< it->second <<endl;
+		while(!assign_stack.empty()){// print answer
+			pair<Word,string> stk_top = assign_stack.top();
+			cout <<"Word x: " << stk_top.first.startX<<", y: "<<stk_top.first.startY<<", len: "\
+				<<stk_top.first.len<<", direction: "<<stk_top.first.direction\
+				<< ", is filled with : "<< stk_top.second <<endl;
+			assign_stack.pop();
 		}
 		printf("node expand: %d\n", node_expand);
 
 	}
-	else if (show_all)  printf("answer count: %d\n", answer_cnt);
-	else { printf("Answer Not Found\n");}
+	else if (show_all)  printf("answer count: %d\n", answer_cnt);// print the number of all answer
+	else { printf("Answer Not Found\n");}// no answer
 }
 
 int main(){
 	bool FC = false;  // Apply forward checking
-	bool MRV = false; // Apply Minimum Remaining Variable selection
+	bool MRV = false; // Apply Minimum Remaining Value selection
 	bool DEGREE = false;// Apply most neighbors Variable selection
-	bool show_all = true;// Find an answer and stop or go through all possible answers
+	bool show_all = false;// Find an answer and stop or go through all possible answers
 	bool ac3 = true; // Apply ac3
 	ifstream fin2("English Words 3000.txt");
 	ifstream fin("puzzle.txt");
-	if (!fin||!fin2) {
+	if (!fin||!fin2) { // Open file failed 
 		cout << "Error opening file. Shutting down..." << endl;
 		return 0;
 	}
@@ -331,12 +349,13 @@ int main(){
 		ss>>str2;
 		vocabulary[str2.size()].push_back(str2);
 	}
-	
+	int i = 1;
 	for(string str; getline( fin, str ,'\n'); ){
-		Puzzle P(str);			 								// initial puzzle with input string
-		P.setDomain();											// set domain initially with corresponding length of vocabulary
-		P.setConstraint();
-		backTracking( P, FC, MRV, DEGREE, show_all,ac3);
+		Puzzle P(str); // initial puzzle with input string
+		P.setDomain();	// set domain initially with corresponding length of vocabulary
+		P.setConstraint(); // set neighbors of all words
+		printf("-------------Puzzle %d--------------\n", i++);
+		backTracking( P, FC, MRV, DEGREE, show_all,ac3); 
 		// reset variables
 		node_expand = 0;
 		answer_cnt = 0;
