@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <climits>
 #include <stack>
+#include <queue>
 using namespace std;
 
 class Word{
@@ -29,7 +30,7 @@ class Word{
             && startX == other.startX
             && startY == other.startY
             && direction== other.direction);
- 		}	
+ 		}
 };
 namespace std {
 
@@ -64,7 +65,6 @@ class Constraint{//Binary constraint
 			this->to_index = b_index;
 		};
 };
-
 vector<string> vocabulary[15];								//the length of the longest vocabulary
 unordered_map<Word, string > assignments;
 stack<Word> assign_stack;
@@ -75,7 +75,7 @@ class Puzzle{
 		vector<Word> words;//Variables
 		unordered_map<Word, vector<string> > domains;
 		unordered_map<Word, vector<string> > old_domains;//use to reset domain to ussign state
-		unordered_map<Word, unordered_map<Word, vector<string> > > fc_state; //use to reset other domain to ussign state
+		unordered_map<Word, unordered_map<Word, vector<string> > > old_state; //use to reset other domain to ussign state
 		unordered_map<Word, vector<Constraint> > neighbors;
 		
 
@@ -123,15 +123,59 @@ class Puzzle{
 			}
 			
 		}
-		bool assign(Word word, string str, bool fc = false){
+		bool removeInconsistentValue(Constraint c){
+			bool removal = false;
+			for(auto i = this->domains[c.to].begin(); i != this->domains[c.to].end();){//Check all possible string of this variable 
+				bool someValue= false;
+				for(auto j = this->domains[c.from].begin(); j != this->domains[c.from].end();++j){//Compared with static source
+					if((*i)[c.to_index]== (*j)[c.from_index])
+					{	
+						 someValue= true;
+					}
+				}
+				if (someValue) ++i;// this string is consistent 
+				else {
+					this->domains[c.to].erase(i);
+					removal = true;
+				}
+			}
+			return removal;
+		}
+
+		void AC3(queue<Constraint> q){
+			while(!q.empty()){
+				Constraint c = q.front(); q.pop();
+				if(removeInconsistentValue(c)){
+					for(Constraint cst: this->neighbors[c.to]){
+						q.push(cst);
+					}
+				}
+			}
+		}
+
+		bool assign(Word word, string str, bool fc = false,bool ac3 = false){
 			this->old_domains[word] = this->domains[word];
 			vector<string> assign_val = {str};
 			this->domains[word] = assign_val;
 			assignments[word] = str;
 			//cout<<"Assign " <<str<< " Successfully"<<endl;
-			if(fc){
-				this->fc_state[word] = this->domains;
-				this->fc_state[word][word] = this->old_domains[word];
+			if (ac3) {
+				this->old_state[word] = this->domains;
+				this->old_state[word][word] = this->old_domains[word];
+				queue<Constraint> q;
+				for(Constraint c: this->neighbors[word]) q.push(c);
+				AC3(q);
+				for(Word word: this->words){
+					if(this->domains[word].empty()){
+						return false;
+					}
+				}
+
+			}
+			else if(fc){
+				//store previous state
+				this->old_state[word] = this->domains;
+				this->old_state[word][word] = this->old_domains[word];
 				for(Constraint c: this->neighbors[word]){
 					auto got = assignments.find(c.to);
 					if(got != assignments.end()) continue;// this neighbor has word but checked already
@@ -144,25 +188,23 @@ class Puzzle{
 					}
 					if(this->domains[c.to].empty()) {	
 						return false;
-							
 					}
 				}
-
 			}
+			
 			return true;
 		}
 
-		void unassign(Word word, bool fc = false){
+		void unassign(Word word, bool fc = false, bool ac3 = false){
 			auto got = assignments.find(word);
 			if(got == assignments.end()) return;
 			assignments.erase(word);
 			//reset domain of unassign word
-			if(fc) this->domains = this->fc_state[word];
+			if(fc||ac3) this->domains = this->old_state[word];
 			else this->domains[word] = this->old_domains[word];
 			//printf("Unassign Successfully\n");
 
 		}
-		
 		Word selectUnsignedWord(bool MRV = false, bool DEGREE = false){
 			if (MRV && DEGREE){//apply mrv first
 				Word return_word;
@@ -198,7 +240,6 @@ class Puzzle{
 			}
 
 			else if (MRV){
-
 				Word mini_remain_word;
 				int least_domain_num = INT_MAX;
 				for(int i = 0; i <this->words.size(); i++){
@@ -228,26 +269,28 @@ class Puzzle{
 			}
 			return true;
 		}
-
+			
 
 };
-bool recursiveBackTracking(Puzzle& P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false){
+
+
+bool recursiveBackTracking(Puzzle& P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false, bool ac3 = false){
 	if (assignments.size() == P.words.size()) return true;
 	else{	
 		Word select = P.selectUnsignedWord(MRV, DEGREE);
 		for(string str: P.domains[select]){
 			if(P.nonConflict(select, str)) {
-				if (!P.assign(select,str,FC)){
-					P.unassign(select,FC);
+				if (!P.assign(select,str,FC,ac3)){
+					P.unassign(select,FC,ac3);
 					continue;
 				}
 				node_expand++;
-				bool result = recursiveBackTracking(P, FC, MRV, DEGREE, show_all);
+				bool result = recursiveBackTracking(P, FC, MRV, DEGREE, show_all,ac3);
 				if(result && !show_all) return result;
 				else if (result && show_all) {
 					answer_cnt++;
 				}
-				P.unassign(select,FC);
+				P.unassign(select,FC,ac3);
 
 			}
 		}
@@ -255,8 +298,8 @@ bool recursiveBackTracking(Puzzle& P,bool FC = false, bool MRV = false, bool DEG
 		return false;
 	}
 }
-void backTracking (Puzzle& P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false){
-	if(recursiveBackTracking(P, FC, MRV, DEGREE, show_all)){
+void backTracking (Puzzle& P,bool FC = false, bool MRV = false, bool DEGREE = false, bool show_all = false, bool ac3 = false){
+	if(recursiveBackTracking(P, FC, MRV, DEGREE, show_all, ac3)){
 		printf("Answer Found\n");
 		for ( auto it = assignments.begin(); it != assignments.end(); ++it ){
     		cout <<"Word x: " << it->first.startX<<", y: "<<it->first.startY<<", len: "\
@@ -272,9 +315,10 @@ void backTracking (Puzzle& P,bool FC = false, bool MRV = false, bool DEGREE = fa
 
 int main(){
 	bool FC = false;  // Apply forward checking
-	bool MRV = true;; // Apply Minimum Remaining Variable selection
+	bool MRV = false; // Apply Minimum Remaining Variable selection
 	bool DEGREE = false;// Apply most neighbors Variable selection
 	bool show_all = true;// Find an answer and stop or go through all possible answers
+	bool ac3 = true; // Apply ac3
 	ifstream fin2("English Words 3000.txt");
 	ifstream fin("puzzle.txt");
 	if (!fin||!fin2) {
@@ -292,7 +336,7 @@ int main(){
 		Puzzle P(str);			 								// initial puzzle with input string
 		P.setDomain();											// set domain initially with corresponding length of vocabulary
 		P.setConstraint();
-		backTracking( P, FC, MRV, DEGREE, show_all);
+		backTracking( P, FC, MRV, DEGREE, show_all,ac3);
 		// reset variables
 		node_expand = 0;
 		answer_cnt = 0;
@@ -303,4 +347,3 @@ int main(){
 	fin2.close();
 	return 0;
 }
-
