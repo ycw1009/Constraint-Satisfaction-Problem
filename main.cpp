@@ -235,7 +235,7 @@ class Puzzle{
 					else if(got == assignments.end() && this->domains[this->words[i]].size() == least_domain_num){
 						if(this->neighbors[this->words[i]].size() > most_degree_cnt){
 							return_word = this->words[i];
-							least_domain_num = this->domains[this->words[i]].size();
+							most_degree_cnt = this->domains[this->words[i]].size();
 						}
 					}
 
